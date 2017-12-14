@@ -5,16 +5,13 @@ import scipy.special as special
 
 # Local modules
 import util
-
 #testing variables
 # msa = [['A','T','G','C'],['A','-','A','-'],['-','-','C','C']]
 # seglen = [1,1,2]
-
-chIndex = {'A':0, 'T':1, 'G':2, 'C':3, '-':4}
-
+chIndex = {'A':0, 'C':1, 'G':2, 'T':3, '-':4}
 def pc_from_tree_with_pv_and_fv(treeWithPvFv) :
 	pc = 0
-	for node in treeWithPvFv :
+	for node in treeWithPvFv.nodes() :
 		pc = pc + node.pv * node.fv
 	return pc
 
@@ -37,8 +34,8 @@ def ftilde_leaf(piExt, ch) :
 
 # Compute the term fv by col
 def fv_by_site(msaSite, seqNames, treeWithBeta, qMatExt, piExt, dRate) :
-	nSeq = len(msa)
-	isCphi = (msa.count('-') == len(msaSite))
+	nSeq = len(msaSite)
+	isCphi = (msaSite.count('-') == len(msaSite))
 	# make the character dictionary
 	chDict = dict(zip(seqNames, msaSite))
 
@@ -46,11 +43,11 @@ def fv_by_site(msaSite, seqNames, treeWithBeta, qMatExt, piExt, dRate) :
 	# the path from root to the most recent common ancestors
 	if not isCphi:
 		# Set S in the support information
-		nonEmptySeqNames = [segNames[i] for i in range(nSeq) if msaSite[i]!='-']
+		nonEmptySeqNames = [seqNames[i] for i in range(nSeq) if msaSite[i]!='-']
 		# The youngest common ancestor of S
 		youngestCommonAncestor = treeWithBeta.mrca(taxon_labels=nonEmptySeqNames)
 		# Set A in the support information
-		nonZeroFvNodes = util.nodePath(treeWithBeta, youngestCommonAncestor)
+		nonZeroFvNodes = util.node_path(treeWithBeta, youngestCommonAncestor)
 	
 	for node in treeWithBeta.postorder_node_iter() :
 		if node.is_leaf() :
@@ -69,7 +66,10 @@ def fv_by_site(msaSite, seqNames, treeWithBeta, qMatExt, piExt, dRate) :
 			node.ftilde = ftilde
 			node.fv = fv
 		else :
-			child1, child2 = node.child_nodes()
+			children = node.child_nodes()
+			child1 = children[0]
+			child2 = children[1]
+
 			ftv1 = child1.ftilde_v
 			ftv2 = child2.ftilde_v
 			bl1 = child1.edge_length
@@ -121,7 +121,7 @@ def PIP_likelihood_single_site(msaSite, seqNames, tree, qMatExt, piExt, dRate) :
 # Compute psi provided z and k
 def compute_Psi(z, k, nu) :
 	# first term in psi
-	k_facorial = special.factorial(k)
+	k_factorial = special.factorial(k)
 	inverse_k_factorial = 1.0 / k_factorial
 	# second term in psi
 	nu_power_k = np.power(nu, k)
@@ -142,10 +142,11 @@ def PIP_likelihood_multiple_sites(msaBySites, seqNames, indelRate, tree, qMatrix
 	# Compute pv and beta in the tree
 	pv_and_beta_recursion_tree(tree, dRate)
 
-	# Compute PIp(c) on one segment
-	pcMultiSite = 1
+	# Compute PIP(c) on one segment
+	pcMultiSite = 0
 	for site in msaBySites:
-		pcMultiSite = pcMultiSite * PIP_likelihood_single_site(site, seqNames, tree, qMatExt, piProbExt, dRate)
+		pcOneSite = PIP_likelihood_single_site(site, seqNames, tree, qMatExt, piProbExt, dRate)
+		pcMultiSite = pcMultiSite + np.log(pcOneSite)
 	
 	# Compute psi 
 	tau = tree.length()
@@ -155,29 +156,33 @@ def PIP_likelihood_multiple_sites(msaBySites, seqNames, indelRate, tree, qMatrix
 	cphi = []
 	for i in range(nSeqs) :
 		cphi.append('-')
-
 	# Compute P(C_0)
 	pc0 = PIP_likelihood_single_site(cphi, seqNames, tree, qMatExt, piProbExt, dRate)
-	psi = compute_Psi(pc0, nCols, nu)
 
-	return psi * pcMultiSite
+	# Compute log Psi
+	logPsi = -np.sum(np.log(np.arange(1, nCols + 1))) + np.log(nu) * nCols + (pc0 - 1) * nu
+	return logPsi + pcMultiSite
 
 # Compute P_{tau}(m) over all segments
 def GeoPIP_likelihood(msa, seqNames, segLength, segRates, segRateProbs, tree, qMatrix, rho) :
 	msaBySeg = util.divide_MSA_by_segment(msa, segLength)
+
 	#Initial likelihood
-	llh = 1
+	llh = 0
+
 	#Compute Likelihood by segment
 	# Multiply them together with omega
 	segIDs = sorted(msaBySeg.keys())
 	for segid in segIDs :
-		segLLH = PIP_likelihood_by_Sites(msaBySeg[segid], segRates[segid], tree, qMatrix) 
-		llh = llh * segRateProbs[segid] * segLLH
+		segLLH = PIP_likelihood_multiple_sites(msaBySeg[segid], seqNames, segRates[segid], tree, qMatrix) 
+		llh = llh - segLLH
+	
+	# add log of omegas
+	llh = llh - np.sum(np.log(segRateProbs))
 
 	# |Beta|
 	nSegs = len(segIDs)
-
-	# multiply the term with geometric parameter
-	llh = llh * np.power(1-rho, nSegs-1) * rho
+	# take into account the term with geometric parameter
+	logGeo = (nSegs-1)*np.log(rho) + np.log(1 - rho)
+	llh = llh - logGeo
 	return llh
-

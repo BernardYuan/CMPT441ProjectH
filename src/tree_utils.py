@@ -28,9 +28,6 @@ def JukesCantorDistanceMatrix(msa) :
         rowIdx = rowIdx + 1
     return DistanceMatrix(names, matrix)
 
-        
-
-
 def build_tree_NJ(msa, distanceMatrix=None) :
     if not distanceMatrix :
         distCalculator = DistanceCalculator("identity")

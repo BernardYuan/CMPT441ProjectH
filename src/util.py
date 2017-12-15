@@ -9,9 +9,9 @@ import numpy as np
 #Example:
 #Input:
 # 	msa: 
-#		[['A','T','G','C'],
-#		 ['A','-','A','-'],
-#		 ['-','-','C','C']]
+#		[['ATGC'],
+#		 ['A-A-'],
+#		 ['--CC']]
 #	segLength:
 #		[1,2,1]
 #Output:

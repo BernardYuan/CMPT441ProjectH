@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.random as random
 
 # Divide a MSA by segment
 # Input: 
@@ -76,3 +77,38 @@ def node_path(tree, node) :
 	nodePath.append(node)
 
 	return nodePath
+
+# Generate segment lengths
+def generate_segment_lengths(m, sequenceLength) :
+	# Randomly generate segments
+	segSites = random.uniform(0,1,m-1)
+	segSites.sort()
+	segSites = np.append(segSites, [1])
+	segSites = np.floor(sequenceLength * segSites)
+
+	segmentLengs = []
+	for index in range(1, len(segSites)) :
+		curLength = segSites[index] - segSites[index-1]
+		segmentLengs.append(curLength)
+	segmentLengs = [int(l) for l in segmentLengs]
+	return segmentLengs
+
+def generate_segment_indel_rates(m, indelRates, indelRateProbs) :
+	indelRateProbCumSum = []
+	for index in range(len(indelRateProbs)) :
+		if index == 0 :
+			indelRateProbCumSum.append(indelRateProbs[index])
+		else :
+			temSum = indelRateProbs[index] + indelRateProbCumSum[index-1]
+			indelRateProbCumSum.append(temSum)
+	### Allocate indel rates
+	indelSeeds = random.uniform(0,1,5)
+	segRates = []
+	segRatesProbs = []
+	for seed in indelSeeds :
+		for index in range(len(indelRateProbCumSum)) :
+			if seed <= indelRateProbCumSum[index] :
+				segRates.append(indelRates[index])
+				segRatesProbs.append(indelRateProbs[index])
+
+	return segRates,segRatesProbs

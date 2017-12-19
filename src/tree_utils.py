@@ -6,10 +6,11 @@ from Bio.Phylo.TreeConstruction import DistanceMatrix
 from Bio.Phylo.TreeConstruction import NNITreeSearcher
 from Bio.Phylo.TreeConstruction import Scorer
 from Bio import Phylo
-import numpy as np
-import dendropy
-from dendropy import Tree, TreeList
 from cStringIO import StringIO
+import util
+import numpy as np
+import numpy.random as random
+from dendropy import Tree
 
 JukesCantorQmatrix = [
     [-3.0, 1.0, 1.0, 1.0],
@@ -22,7 +23,6 @@ treeTest = "[&R] (((seq3:0.15533,seq4:0.03316)Inner4:0.08312,(seq2:0.09434,seq1:
 def JukesCantorDistanceMatrix(msa) :
     names = [seq.id for seq in msa]
     matrix = []
-
     rowIdx = 0
     for row in msa:
         matrix.append([])
@@ -34,24 +34,33 @@ def JukesCantorDistanceMatrix(msa) :
                 strLen = len(row.seq)
                 diff = 0
                 for i in range(strLen) :
-                    if row.seq[i] != col.seq[i] :
+                    if row.seq[i]!='-' and col.seq[i]!= '-' and row.seq[i] != col.seq[i] :
                         diff = diff + 1
                 JDdist = -0.75 * np.log(1 - 4./3 * (1.0 * diff / strLen))
                 matrix[rowIdx].append(JDdist)
         rowIdx = rowIdx + 1
     return DistanceMatrix(names, matrix)
+def build_tree_UPGMA(msa, distanceMatrix=None) :
+    if not distanceMatrix :
+        distCalculator = DistanceCalculator("identity")
+        distanceMatrix = distCalculator.get_distance(msa)
+    # Construct the tree with the distance Matrix
+    constructor = DistanceTreeConstructor()
+    tree = constructor.upgma(distanceMatrix)
+    # Make the tree rooted
+    #tree.root_at_midpoint()
+    #return newick format
+    return "[&R] " + tree.format("newick").strip()
 
 def build_tree_NJ(msa, distanceMatrix=None) :
     if not distanceMatrix :
         distCalculator = DistanceCalculator("identity")
         distanceMatrix = distCalculator.get_distance(msa)
-
     # Construct the tree with the distance Matrix
     constructor = DistanceTreeConstructor()
     tree = constructor.nj(distanceMatrix)
-
     # Make the tree rooted
-    tree.root_at_midpoint()
+    #tree.root_at_midpoint()
     #return newick format
     return "[&R] " + tree.format("newick").strip()
 
@@ -66,3 +75,45 @@ def NNITreeSurgery(treeStr, schema="newick") :
         tstr.strip()
         allTreeList.append("[&R] " + tstr[0:len(tstr)-6] + ";")
     return allTreeList
+
+def node_distance(offspring, ancestor) :
+    node = offspring
+    dist = 0
+    while node != ancestor :
+        dist += node.edge_length
+        node = node.parent_node
+    return dist
+
+def leaf_distance_from_tree(tree) :
+    leavesName = []
+    for leaf in tree.leaf_nodes() :
+        leavesName.append(leaf.taxon.label)
+    distMatrix = []
+    nLeaf = len(leavesName)
+    for i in range(nLeaf) :
+        distMatrix.append([])
+        for j in range(i) :
+            name1 = leavesName[i]
+            name2 = leavesName[j]
+            node1 = tree.find_node_with_taxon_label(name1)
+            node2 = tree.find_node_with_taxon_label(name2)
+            ancestor = tree.mrca(taxon_labels=[name1, name2])
+            dist1 = node_distance(node1, ancestor)
+            dist2 = node_distance(node2, ancestor)
+            distMatrix[i].append(dist1 + dist2)
+        distMatrix[i].append(0)
+    return DistanceMatrix(leavesName, distMatrix)
+
+def generate_balanced_tree_with_fixed_edge_length(numLeaf, bLen=0.5, prefix="seq") :
+    leafNames = [prefix+str(i) for i in range(numLeaf)]
+    nodeNames = [name for name in leafNames]
+
+    while len(nodeNames) > 1 :
+        node1 = nodeNames[0]
+        node2 = nodeNames[1]
+
+        nodeNew = '(' + node1 + ':' + str(bLen) + ',' + node2 + ':' + str(bLen) + ')'
+        nodeNames = nodeNames[2:]
+        nodeNames.append(nodeNew)
+    
+    return '[&R] ' + nodeNames[0] + ';'

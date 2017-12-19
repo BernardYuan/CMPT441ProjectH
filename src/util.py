@@ -112,3 +112,18 @@ def generate_segment_indel_rates(m, indelRates, indelRateProbs) :
 				segRatesProbs.append(indelRateProbs[index])
 
 	return segRates,segRatesProbs
+
+# Generate rate matrix with f81 model
+def qmat_from_pi(pi = [0.25, 0.25, 0.25, 0.25]) :
+    piProb = np.array(pi)
+    n = len(piProb)
+    res = np.tile(piProb, (n, 1))
+    np.fill_diagonal(res, 0)
+    rowsum = res.sum(axis=1)
+    np.fill_diagonal(res, -rowsum)
+    beta = 1.0 / (1. - sum(piProb**2))
+    res = beta * res
+    return res
+
+# optimize pairwise distance
+#def optimize_b_2list() :

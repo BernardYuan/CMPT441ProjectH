@@ -46,7 +46,7 @@ treeSetNNI = treeutil.NNITreeSurgery(treeStr)
 # Base tree nllk
 tree = dendropy.Tree.get(data=treeStr, schema="newick")
 nllk = llk.GeoPIP_likelihood(alignment, seqNames, segmentLengs, segRates, segRatesProbs, tree, qMat, rho)
-print "True Tree:", nllk, "  tree string:", treeStr
+print "True tree:", nllk, "  tree string:", treeStr
 # surgery tree
 index = 0
 for treestr in treeSetNNI :

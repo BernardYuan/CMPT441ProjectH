@@ -2,7 +2,8 @@
 import numpy as np
 import scipy as sp
 import scipy.special as special
-
+import scipy.stats as stats
+import copy
 # Local modules
 import util
 #testing variables
@@ -118,19 +119,6 @@ def PIP_likelihood_single_site(msaSite, seqNames, tree, qMatExt, piExt, dRate) :
 	pc = pc_from_tree_with_pv_and_fv(tree)
 	return pc
 
-# Compute psi provided z and k
-def compute_Psi(z, k, nu) :
-	# first term in psi
-	k_factorial = special.factorial(k)
-	inverse_k_factorial = 1.0 / k_factorial
-	# second term in psi
-	nu_power_k = np.power(nu, k)
-	# third term in psi
-	exp_zminus1_nu = np.exp((z-1)*nu)
-
-	return inverse_k_factorial * nu_power_k * exp_zminus1_nu
-
-
 # Compute the likelihood of multiple sites
 def PIP_likelihood_multiple_sites(msaBySites, seqNames, indelRate, tree, qMatrix) :
 	iRate = indelRate[0]
@@ -186,3 +174,92 @@ def GeoPIP_likelihood(msa, seqNames, segLength, segRates, segRateProbs, tree, qM
 	logGeo = (nSegs-1)*np.log(rho) + np.log(1 - rho)
 	llh = llh - logGeo
 	return llh
+
+def pv_prior(b1, b2, dRate) :
+	tau = b1 + b2
+	denom = tau + 1./dRate
+	p1 = b1/denom
+	p2 = b2/denom
+	p0 = (1./dRate) / denom
+	return p1, p2, p0
+
+def fv(c1, c2, piExt, pMatExt, b, dRate, cListExt) :
+	index1 = cListExt.index(c1)
+	index2 = cListExt.index(c2)
+	pic1 = piExt[index1]
+	pic2 = piExt[index2]
+	logic1 = (c1 != '-')
+	logic2 = (c2 != '-')
+	if logic1:
+		ft0 = pic1 * pMatExt[index1, index2]
+	else:
+		ft0 = 0
+	f0 = ft0
+	beta = (1 - np.exp(-dRate * b)) / (b * dRate)
+	if ((not logic1) and logic2):
+		f2 = beta * pic2
+	elif ((not logic1) and (not logic2)):
+		f2 = 1 - beta
+	else:
+		f2 = 0
+	if (logic1 or logic2):   # not really necesarry
+		f1 = 0   # not really necesarry
+	else:   # not really necesarry
+		f1 = 1   # not really necesarry
+	return f1, f2, f0
+
+def prob_c_all(piExt, pMat, b, dRate, cListExt) :
+	pc = {}
+	pvPrior = pv_prior(0, b, dRate)
+	for c1 in cListExt :
+		pc[c1] = {}
+		for c2 in cListExt :
+			fvProb = fv(c1, c2, piExt, pMat, b, dRate, cListExt)
+			pc[c1][c2] = np.dot(pvPrior, fvProb)
+	return pc
+
+# Compute likelihood between two sequences
+def logprob_m(seq1, seq2, b, pcAll, iRate, dRate) :
+	tau = b
+	nu = iRate * (tau + 1./dRate)
+	nSites = len(seq1)
+	if nSites == 0 :
+		return (pcAll['-']['-'] - 1) * nu
+	else :
+		logphi = -np.sum(np.log(np.arange(1, nSites+1))) + nSites * np.log(nu) + (pcAll['-']['-']-1) * nu
+		logpc = 0
+		for i in range(nSites) :
+			logpc += np.log(pcAll[seq1[i]][seq2[i]])
+		return logphi + logpc
+
+def PIP_likelihood_2list(b, seq1, seq2, indelRate, qmat, cList=['A', 'C', 'G', 'T']) :
+	# probability of insertion
+	insRate = indelRate[0]
+	delRate = indelRate[1]
+	qext = util.q_to_qext(qmat, delRate)
+	pmat = sp.linalg.expm(b * qext)
+	pi = util.pi_from_qmat(qmat)
+	piExt = np.append(pi, [0])
+	cListExt = cList + ['-']
+	pcAll = prob_c_all(piExt, pmat, b, delRate, cListExt)
+	return logprob_m(seq1, seq2, b, pcAll, insRate, delRate)
+
+# Compute the likelihood between two sequences with GeoPIP model
+# b: integer
+# seq1: [[seg1], [seg2], ...]
+# seq2: [[seg1], [seg2], ...]
+# segRates: [(ins1, del1), (ins2, del2)]
+# qmat: the rate matrix
+def GeoPIP_likelihood_2list(b, seq1, seq2, segRates, qMat) :
+	if b <= 0:    # set lower bound, do not accept negative values
+		return 1.e10
+	if b > 100:    # set upper bound, do accept bigger values, but truncate
+		return 1.e-10    # if bigger than 100, then return 100
+	nllk = 0
+	nSegs = len(segRates)
+	for i in range(nSegs) :
+		seg1 = copy.deepcopy(seq1[i])
+		seg2 = copy.deepcopy(seq2[i])
+		indelRate = segRates[i]
+		nllk += -PIP_likelihood_2list(b, seg1, seg2, indelRate, qMat)
+	return nllk

@@ -11,7 +11,7 @@ Contains the MSA sequences we are working with. 'fabricated_msa.fasta' contains 
 
 script 
 
-contains the execution code for our hard and stretch goal, results of each program, as well as a print support program
+Contains the execution code for our hard and stretch goal, results of each program, as well as a print support program
 
 ------------
 

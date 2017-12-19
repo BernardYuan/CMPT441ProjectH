@@ -1,0 +1,44 @@
+from random import randint
+
+#REMEMBER to create output file first in current directory
+
+#Replace N in files with G, A, T or C
+#Open the file and process every line
+cfile = open('1.fasta', 'r')
+with open('new1.fasta', 'w') as nfile:
+    for line in cfile.readlines():
+        #print line
+       
+        #make current line a list
+        nlist = list(line)
+        #print(nlist)
+
+        #Skip names of sequences
+        if(nlist[0] == '>'):
+            s = "".join(nlist)
+            nfile.write(s)
+            continue
+
+        #Go through current list and replace each N with random letter
+        #print(nlist)
+        for i in range(0, len(nlist)):
+            if(nlist[i] == 'N'):
+                r = randint(0, 3)
+                if(r == 0):
+                    nlist[i] = 'G'
+                if(r == 1):
+                    nlist[i] = 'A'
+                if(r == 2):
+                    nlist[i] = 'T'
+                if(r == 3):
+                    nlist[i] = 'C'
+        #print(nlist)
+
+        #Recreate the string and output to result file
+        s = "".join(nlist)
+        #print(s)
+
+        nfile.write(s)
+       
+cfile.close
+nfile.close
